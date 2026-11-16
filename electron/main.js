@@ -46,17 +46,22 @@ function resolveServerScript() {
 }
 
 async function startBackendServer() {
-    // If running in development and an external dev server is already running, avoid duplicate fork
-    if (isDev) {
-        const alreadyRunning = await checkServerListening(3001);
-        if (alreadyRunning) {
-            console.log('[Electron] External backend server already running on port 3001.');
-            return;
-        }
+    // If backend server is already running and answering health checks on port 3001, reuse it
+    const alreadyRunning = await checkServerListening(3001);
+    if (alreadyRunning) {
+        console.log('[Electron] Backend server already running and healthy on port 3001.');
+        return;
     }
 
     const serverScript = resolveServerScript();
     console.log(`[Electron] Starting backend server process from: ${serverScript}`);
+
+    const nodePathEnv = isPackaged
+        ? [
+            path.join(process.resourcesPath, 'app.asar', 'node_modules'),
+            path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules')
+          ].join(path.delimiter)
+        : (process.env.NODE_PATH || '');
 
     serverProcess = fork(serverScript, [], {
         env: {
@@ -65,7 +70,9 @@ async function startBackendServer() {
             CRM_USER_DATA_DIR: userDataDir,
             IS_ELECTRON: 'true',
             APP_VERSION: app.getVersion(),
-            ELECTRON_RUN_AS_NODE: '1'
+            ELECTRON_RUN_AS_NODE: '1',
+            NODE_NO_WARNINGS: '1',
+            NODE_PATH: nodePathEnv
         },
         stdio: 'inherit'
     });
