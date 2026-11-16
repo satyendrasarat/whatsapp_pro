@@ -1,4 +1,4 @@
-import { contactsDao, listsDao } from './db.js';
+import { contactsDao, listsDao, lidMappingsDao } from './db.js';
 
 export async function fetchAllGroups(sock) {
     if (!sock) throw new Error('WhatsApp session is not connected');
@@ -30,30 +30,73 @@ export async function extractGroupMembers(sock, groupJid) {
     const memberResults = [];
 
     for (const participant of metadata.participants) {
-        if (participant.id.endsWith('@s.whatsapp.net')) {
+        // WhatsApp Baileys participant object structure:
+        // - participant.jid: actual phone JID (e.g. 919876543210@s.whatsapp.net) when available
+        // - participant.id: might be phone JID OR lid (e.g. 161078587699354@lid)
+        // - participant.lid: the LID if available
+        // - participant.phoneNumber: phone number string if present
+        const phoneJid = (participant.jid && participant.jid.endsWith('@s.whatsapp.net'))
+            ? participant.jid
+            : (participant.id && participant.id.endsWith('@s.whatsapp.net')
+                ? participant.id
+                : (participant.phoneNumber ? `${participant.phoneNumber.replace(/\D/g, '')}@s.whatsapp.net` : null));
+
+        const lid = (participant.lid && participant.lid.endsWith('@lid'))
+            ? participant.lid
+            : (participant.id && participant.id.endsWith('@lid') ? participant.id : null);
+
+        if (phoneJid) {
+            const rawPhone = phoneJid.split('@')[0].replace(/\D/g, '');
             memberResults.push({
-                jid: participant.id,
-                phone: participant.id.split('@')[0],
+                jid: phoneJid,
+                phone: rawPhone,
+                lid: lid || null,
                 isAdmin: !!participant.admin,
-                adminRole: participant.admin || 'member'
+                adminRole: participant.admin ? (participant.admin === 'superadmin' ? 'superadmin' : 'admin') : 'member'
             });
-        } else if (participant.id.endsWith('@lid')) {
-            lidList.push(participant.id);
+
+            // Automatically cache the LID to phone mapping in DB
+            if (lid) {
+                try {
+                    lidMappingsDao.upsert(lid, phoneJid, rawPhone, null);
+                } catch (_) {}
+            }
+        } else if (lid) {
+            // Check if our database already has this LID mapped to a known phone number
+            const existingMapping = lidMappingsDao.get(lid);
+            if (existingMapping && existingMapping.phone_number) {
+                memberResults.push({
+                    jid: existingMapping.phone_jid || `${existingMapping.phone_number}@s.whatsapp.net`,
+                    phone: existingMapping.phone_number,
+                    lid: lid,
+                    isAdmin: !!participant.admin,
+                    adminRole: participant.admin ? 'admin' : 'member'
+                });
+            } else {
+                lidList.push(lid);
+            }
         }
     }
 
-    // Resolve LIDs using Signal Repository cache
+    // Resolve any remaining unmapped LIDs using Signal Repository cache if available
     if (lidList.length > 0 && sock.signalRepository?.lidMapping) {
         try {
             const mappings = await sock.signalRepository.lidMapping.getPNsForLIDs(lidList).catch(() => []);
             for (const item of mappings) {
                 if (item && item.pn) {
+                    const rawPhone = item.pn.split('@')[0].replace(/\D/g, '');
                     memberResults.push({
-                        jid: `${item.pn.split('@')[0]}@s.whatsapp.net`,
-                        phone: item.pn.split('@')[0],
+                        jid: `${rawPhone}@s.whatsapp.net`,
+                        phone: rawPhone,
+                        lid: item.lid || null,
                         isAdmin: false,
                         adminRole: 'member (resolved from LID)'
                     });
+                    if (item.lid) {
+                        try {
+                            lidMappingsDao.upsert(item.lid, `${rawPhone}@s.whatsapp.net`, rawPhone, null);
+                        } catch (_) {}
+                    }
                 }
             }
         } catch (e) {
@@ -61,17 +104,21 @@ export async function extractGroupMembers(sock, groupJid) {
         }
     }
 
-    // Also include remaining unresolved LIDs as raw entries so no member is lost
+    // Only if a member's phone number is strictly hidden by WhatsApp privacy settings, retain LID
     const resolvedPhones = new Set(memberResults.map(m => m.phone));
+    const resolvedLids = new Set(memberResults.map(m => m.lid).filter(Boolean));
     for (const lid of lidList) {
-        const rawId = lid.split('@')[0];
-        if (!resolvedPhones.has(rawId)) {
-            memberResults.push({
-                jid: lid,
-                phone: rawId,
-                isAdmin: false,
-                adminRole: 'member (LID)'
-            });
+        if (!resolvedLids.has(lid)) {
+            const rawId = lid.split('@')[0];
+            if (!resolvedPhones.has(rawId)) {
+                memberResults.push({
+                    jid: lid,
+                    phone: rawId,
+                    lid: lid,
+                    isAdmin: false,
+                    adminRole: 'member (hidden phone/LID)'
+                });
+            }
         }
     }
 
