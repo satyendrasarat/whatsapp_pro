@@ -5,7 +5,9 @@ import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const LOGS_DIR = path.join(__dirname, '..', 'logs');
+const LOGS_DIR = process.env.CRM_USER_DATA_DIR
+    ? path.join(process.env.CRM_USER_DATA_DIR, 'logs')
+    : path.join(__dirname, '..', 'logs');
 const LOG_FILE = path.join(LOGS_DIR, 'crm_activity.log');
 const MAX_LOG_SIZE = 10 * 1024 * 1024; // 10 MB per file
 

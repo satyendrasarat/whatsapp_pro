@@ -12,6 +12,8 @@
     "dev:all": "concurrently \"npm run server\" \"vite\"",
     "electron": "electron .",
     "electron:dev": "concurrently \"npm run server\" \"vite\" \"wait-on tcp:5173 && wait-on tcp:3001 && electron .\"",
+    "dist:win": "npm run build && electron-builder --win",
+    "dist:dir": "npm run build && electron-builder --dir",
     "start": "node server/index.js"
   },
   "dependencies": {
@@ -20,6 +22,7 @@
     "clsx": "^2.1.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
+    "electron-updater": "^6.8.11",
     "express": "^4.21.2",
     "libphonenumber-js": "^1.11.19",
     "lucide-react": "^1.16.0",
@@ -40,10 +43,53 @@
     "autoprefixer": "^10.4.20",
     "concurrently": "^9.1.2",
     "electron": "^34.2.0",
+    "electron-builder": "^26.18.0",
     "postcss": "^8.5.2",
     "tailwindcss": "^3.4.17",
     "vite": "^6.1.0",
     "wait-on": "^8.0.2"
+  },
+  "build": {
+    "appId": "com.satyendrasarat.whatsapppro",
+    "productName": "WhatsApp CRM Pro",
+    "copyright": "Copyright © 2026 Satyendra Sarat",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "server/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "server/**",
+      "node_modules/@whiskeysockets/**",
+      "node_modules/pino/**"
+    ],
+    "publish": {
+      "provider": "github",
+      "owner": "satyendrasarat",
+      "repo": "whatsapp_pro"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "WhatsApp CRM Pro"
+    }
   }
 }
-

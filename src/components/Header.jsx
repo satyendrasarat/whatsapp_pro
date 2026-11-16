@@ -36,8 +36,18 @@ export const Header = ({
   const [sendResult, setSendResult] = useState(null);
   const [inputMode, setInputMode] = useState('search'); // 'search' or 'direct'
   const [formError, setFormError] = useState('');
+  const [updateState, setUpdateState] = useState(null);
 
   const isConnected = activeSession?.status === 'connected';
+
+  // Listen for Electron auto-updater status
+  useEffect(() => {
+    if (window.electronAPI?.receive) {
+      window.electronAPI.receive('update-status', (data) => {
+        setUpdateState(data);
+      });
+    }
+  }, []);
 
   // Load contacts when modal opens
   useEffect(() => {
@@ -170,6 +180,25 @@ export const Header = ({
                 ? `Pro License (${licenseInfo.daysLeft !== undefined ? `${licenseInfo.daysLeft}d` : 'Active'})`
                 : 'Activate License'}
             </span>
+          </button>
+        )}
+
+        {/* Electron Auto-Update Status Pill */}
+        {updateState?.status === 'downloading' && (
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border bg-blue-950/60 border-blue-500/40 text-blue-300 text-xs font-semibold animate-pulse">
+            <Sparkles className="w-3.5 h-3.5 animate-spin" />
+            <span>Updating ({updateState.percent || 0}%)</span>
+          </div>
+        )}
+        {updateState?.status === 'downloaded' && (
+          <button
+            type="button"
+            onClick={() => window.electronAPI?.quitAndInstall?.()}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border bg-emerald-500 text-slate-950 hover:bg-emerald-400 font-bold text-xs transition shadow-lg shadow-emerald-500/20 cursor-pointer"
+            title="New version downloaded! Click to restart app and apply update."
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Update Ready (Restart)</span>
           </button>
         )}
 

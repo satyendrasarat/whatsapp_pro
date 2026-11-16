@@ -16,7 +16,9 @@ import { voiceService } from './voiceService.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const SESSIONS_DIR = path.join(__dirname, '..', 'sessions');
+const SESSIONS_DIR = process.env.CRM_USER_DATA_DIR
+    ? path.join(process.env.CRM_USER_DATA_DIR, 'sessions')
+    : path.join(__dirname, '..', 'sessions');
 
 if (!fs.existsSync(SESSIONS_DIR)) {
     fs.mkdirSync(SESSIONS_DIR, { recursive: true });
