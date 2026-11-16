@@ -10,6 +10,7 @@ import GroupGrabber from './pages/GroupGrabber';
 import AIAssistant from './pages/AIAssistant';
 import Settings from './pages/Settings';
 import LiveChatInbox from './pages/LiveChatInbox';
+import LicenseGateModal from './components/LicenseGateModal';
 import { api } from './services/api';
 import { playNeedsHumanAlert } from './utils/soundEffects';
 
@@ -18,6 +19,18 @@ export function App() {
   const [liveSessions, setLiveSessions] = useState([]);
   const [stats, setStats] = useState(null);
   const [quickDispatchTarget, setQuickDispatchTarget] = useState(null);
+  const [licenseInfo, setLicenseInfo] = useState(null);
+  const [isLicenseModalOpen, setIsLicenseModalOpen] = useState(false);
+
+  const fetchLicenseState = async () => {
+    try {
+      const res = await api.getLicenseStatus();
+      setLicenseInfo(res);
+      if (!res.isValid) {
+        setIsLicenseModalOpen(true);
+      }
+    } catch (_) {}
+  };
 
   const fetchGlobalState = async () => {
     try {
@@ -37,6 +50,7 @@ export function App() {
 
   useEffect(() => {
     fetchGlobalState();
+    fetchLicenseState();
 
     const unsubscribe = api.subscribe((event) => {
       if (event.type === 'init_state') {
@@ -87,6 +101,8 @@ export function App() {
           onRefresh={fetchGlobalState}
           quickDispatchTarget={quickDispatchTarget}
           onCloseQuickDispatch={() => setQuickDispatchTarget(null)}
+          licenseInfo={licenseInfo}
+          onOpenLicenseModal={() => setIsLicenseModalOpen(true)}
         />
 
         <main className="flex-1 overflow-hidden relative">
@@ -107,6 +123,15 @@ export function App() {
           {activeTab === 'settings' && <Settings />}
         </main>
       </div>
+
+      {/* License Activation & Verification Modal */}
+      <LicenseGateModal
+        isOpen={isLicenseModalOpen}
+        isBlocking={!licenseInfo?.isValid}
+        licenseInfo={licenseInfo}
+        onClose={() => setIsLicenseModalOpen(false)}
+        onLicenseUpdated={fetchLicenseState}
+      />
     </div>
   );
 }

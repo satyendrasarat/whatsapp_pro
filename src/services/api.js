@@ -429,6 +429,24 @@ class ApiService {
       body: JSON.stringify({ labels })
     });
   }
+
+  // License & Telemetry
+  getLicenseStatus() {
+    return this.request('/license/status');
+  }
+
+  activateLicense(mobile) {
+    return this.request('/license/activate', {
+      method: 'POST',
+      body: JSON.stringify({ mobile })
+    });
+  }
+
+  verifyLicense() {
+    return this.request('/license/verify', {
+      method: 'POST'
+    });
+  }
 }
 
 export const api = new ApiService();

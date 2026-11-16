@@ -16,7 +16,15 @@ import {
 import { api } from '../services/api';
 import Modal from './Modal';
 
-export const Header = ({ title, activeSession, onRefresh, quickDispatchTarget, onCloseQuickDispatch }) => {
+export const Header = ({
+  title,
+  activeSession,
+  onRefresh,
+  quickDispatchTarget,
+  onCloseQuickDispatch,
+  licenseInfo,
+  onOpenLicenseModal
+}) => {
   const [isQuickMsgOpen, setIsQuickMsgOpen] = useState(false);
   const [phone, setPhone] = useState('');
   const [selectedContactName, setSelectedContactName] = useState('');
@@ -141,6 +149,29 @@ export const Header = ({ title, activeSession, onRefresh, quickDispatchTarget, o
           <ShieldCheck className="w-4 h-4 text-emerald-400" />
           <span>Anti-Ban Jitter Guard Active</span>
         </div>
+
+        {/* License Status Pill */}
+        {licenseInfo && (
+          <button
+            type="button"
+            onClick={onOpenLicenseModal}
+            className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition cursor-pointer ${
+              licenseInfo.isValid
+                ? (licenseInfo.daysLeft <= 7)
+                  ? 'bg-amber-950/60 border-amber-500/40 text-amber-300 hover:bg-amber-900/40'
+                  : 'bg-purple-950/60 border-purple-500/40 text-purple-300 hover:bg-purple-900/40'
+                : 'bg-rose-950/60 border-rose-500/40 text-rose-300 hover:bg-rose-900/40'
+            }`}
+            title="Click to view license & device details"
+          >
+            <ShieldCheck className={`w-3.5 h-3.5 ${licenseInfo.isValid ? (licenseInfo.daysLeft <= 7 ? 'text-amber-400' : 'text-purple-400') : 'text-rose-400'}`} />
+            <span>
+              {licenseInfo.isValid
+                ? `Pro License (${licenseInfo.daysLeft !== undefined ? `${licenseInfo.daysLeft}d` : 'Active'})`
+                : 'Activate License'}
+            </span>
+          </button>
+        )}
 
         {/* WhatsApp Connection Pill */}
         <div

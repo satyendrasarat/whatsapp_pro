@@ -35,6 +35,7 @@ import { CampaignDispatcher } from './campaignDispatcher.js';
 import { FlowEngine } from './flowEngine.js';
 import { AIEngine } from './aiEngine.js';
 import { voiceService } from './voiceService.js';
+import { licenseService } from './licenseService.js';
 import { fetchAllGroups, extractGroupMembers, saveGroupMembersToList } from './groupGrabber.js';
 import { standardizePhone } from './phoneUtils.js';
 
@@ -91,6 +92,7 @@ function broadcastWs(data) {
 
 engineHost.setEventListener(broadcastWs);
 engineHost.autoRestoreSessions();
+licenseService.startHeartbeat();
 
 const campaignDispatcher = new CampaignDispatcher(engineHost, {
     onProgress: (event) => broadcastWs({ type: 'campaign_progress', ...event })
@@ -832,6 +834,37 @@ app.get('/api/engine/logs', (req, res) => {
         const lines = parseInt(req.query.lines || '250', 10);
         const logs = getRecentLogs(lines);
         res.json({ success: true, logs, logPath: getLogFilePath() });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// -------------------------------------------------------------
+// License & Hardware Verification API
+// -------------------------------------------------------------
+app.get('/api/license/status', (req, res) => {
+    try {
+        const status = licenseService.getStatus();
+        res.json({ success: true, ...status });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/license/activate', async (req, res) => {
+    const { mobile } = req.body || {};
+    try {
+        const result = await licenseService.verifyRemote(mobile);
+        res.json(result);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/license/verify', async (req, res) => {
+    try {
+        const result = await licenseService.verifyRemote();
+        res.json(result);
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
