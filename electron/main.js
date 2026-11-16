@@ -36,10 +36,6 @@ function checkServerListening(port) {
 
 function resolveServerScript() {
     if (isPackaged) {
-        const unpackedScript = path.join(process.resourcesPath, 'app.asar.unpacked', 'server', 'index.js');
-        if (fs.existsSync(unpackedScript)) {
-            return unpackedScript;
-        }
         return path.join(process.resourcesPath, 'app', 'server', 'index.js');
     }
     return path.join(__dirname, '..', 'server', 'index.js');
@@ -56,13 +52,6 @@ async function startBackendServer() {
     const serverScript = resolveServerScript();
     console.log(`[Electron] Starting backend server process from: ${serverScript}`);
 
-    const nodePathEnv = isPackaged
-        ? [
-            path.join(process.resourcesPath, 'app.asar', 'node_modules'),
-            path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules')
-          ].join(path.delimiter)
-        : (process.env.NODE_PATH || '');
-
     serverProcess = fork(serverScript, [], {
         env: {
             ...process.env,
@@ -71,8 +60,7 @@ async function startBackendServer() {
             IS_ELECTRON: 'true',
             APP_VERSION: app.getVersion(),
             ELECTRON_RUN_AS_NODE: '1',
-            NODE_NO_WARNINGS: '1',
-            NODE_PATH: nodePathEnv
+            NODE_NO_WARNINGS: '1'
         },
         stdio: 'inherit'
     });

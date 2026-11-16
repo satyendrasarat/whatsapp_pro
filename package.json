@@ -62,12 +62,7 @@
       "electron/**/*",
       "package.json"
     ],
-    "asar": true,
-    "asarUnpack": [
-      "server/**",
-      "node_modules/@whiskeysockets/**",
-      "node_modules/pino/**"
-    ],
+    "asar": false,
     "publish": {
       "provider": "github",
       "owner": "satyendrasarat",
