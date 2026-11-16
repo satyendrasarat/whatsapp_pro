@@ -563,14 +563,15 @@ export const LiveChatInbox = () => {
   };
 
   // Bulk Delete: Toggle select a chat for bulk delete
-  const toggleSelectChat = (jid, e) => {
-    e?.stopPropagation();
+  const toggleSelectChat = (jid, forceChecked = null, e = null) => {
+    if (e && e.stopPropagation) e.stopPropagation();
     setSelectedJidsForDelete((prev) => {
       const next = new Set(prev);
-      if (next.has(jid)) {
-        next.delete(jid);
-      } else {
+      const shouldCheck = forceChecked !== null ? forceChecked : !next.has(jid);
+      if (shouldCheck) {
         next.add(jid);
+      } else {
+        next.delete(jid);
       }
       return next;
     });
@@ -816,21 +817,24 @@ export const LiveChatInbox = () => {
         {/* Bulk Selection / Action Toolbar */}
         {filteredConversations.length > 0 && (
           <div className="px-3.5 py-2 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between text-xs">
-            <label className="flex items-center gap-2 cursor-pointer select-none text-slate-300 hover:text-slate-100 font-medium">
+            <label
+              onClick={(e) => e.stopPropagation()}
+              className="flex items-center gap-2 cursor-pointer select-none text-slate-300 hover:text-slate-100 font-medium"
+            >
               <input
                 type="checkbox"
-                checked={selectedJidsForDelete.size > 0 && selectedJidsForDelete.size === filteredConversations.length}
+                checked={filteredConversations.length > 0 && selectedJidsForDelete.size === filteredConversations.length}
                 ref={(el) => {
                   if (el) {
                     el.indeterminate = selectedJidsForDelete.size > 0 && selectedJidsForDelete.size < filteredConversations.length;
                   }
                 }}
                 onChange={toggleSelectAll}
-                className="w-3.5 h-3.5 rounded border-slate-700 bg-slate-800 text-emerald-500 focus:ring-0 focus:ring-offset-0 cursor-pointer"
+                className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-emerald-500 focus:ring-0 focus:ring-offset-0 cursor-pointer accent-emerald-500"
               />
               <span className="text-[11px]">
                 {selectedJidsForDelete.size > 0 
-                  ? `${selectedJidsForDelete.size} selected` 
+                  ? `${selectedJidsForDelete.size} of ${filteredConversations.length} selected` 
                   : `Select All (${filteredConversations.length})`}
               </span>
             </label>
@@ -895,18 +899,22 @@ export const LiveChatInbox = () => {
                       : 'hover:bg-slate-800/40'
                   }`}
                 >
-                  {/* Select Checkbox */}
-                  <div
-                    onClick={(e) => toggleSelectChat(conv.contact_jid, e)}
-                    className="pt-1 shrink-0"
+                  {/* Select Checkbox (Individual Choice) */}
+                  <label
+                    onClick={(e) => e.stopPropagation()}
+                    className="pt-1.5 shrink-0 cursor-pointer p-0.5 rounded hover:bg-slate-700/50 transition flex items-center justify-center"
+                    title="Select this chat to delete"
                   >
                     <input
                       type="checkbox"
                       checked={selectedJidsForDelete.has(conv.contact_jid)}
-                      onChange={(e) => toggleSelectChat(conv.contact_jid, e)}
-                      className="w-3.5 h-3.5 rounded border-slate-700 bg-slate-800 text-emerald-500 focus:ring-0 focus:ring-offset-0 cursor-pointer"
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        toggleSelectChat(conv.contact_jid, e.target.checked);
+                      }}
+                      className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-emerald-500 focus:ring-0 focus:ring-offset-0 cursor-pointer accent-emerald-500"
                     />
-                  </div>
+                  </label>
 
                   {/* Avatar */}
                   <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-slate-800 to-slate-700 border border-slate-700 flex items-center justify-center text-slate-200 font-bold text-xs shrink-0 shadow">
