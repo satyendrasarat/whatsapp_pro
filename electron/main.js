@@ -174,6 +174,19 @@ function registerIpcHandlers() {
     });
 }
 
+async function waitForBackendReady(port = 3001, maxRetries = 20) {
+    for (let i = 0; i < maxRetries; i++) {
+        const isUp = await checkServerListening(port);
+        if (isUp) {
+            console.log(`[Electron] Backend server confirmed healthy on port ${port} after attempt ${i + 1}`);
+            return true;
+        }
+        await new Promise((r) => setTimeout(r, 250));
+    }
+    console.warn(`[Electron] Backend server did not respond on port ${port} within timeout.`);
+    return false;
+}
+
 function createWindow() {
     mainWindow = new BrowserWindow({
         width: 1440,
@@ -191,6 +204,17 @@ function createWindow() {
 
     // Remove default top menu for a modern app feel
     mainWindow.setMenuBarVisibility(false);
+
+    // Allow developer tools via F12 or Ctrl+Shift+I for easy troubleshooting
+    mainWindow.webContents.on('before-input-event', (event, input) => {
+        if (input.key === 'F12' || (input.control && input.shift && input.key.toLowerCase() === 'i')) {
+            mainWindow.webContents.toggleDevTools();
+        }
+    });
+
+    mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+        console.error('[Electron] Window failed to load:', errorCode, errorDescription);
+    });
 
     const devUrl = 'http://localhost:5173';
 
@@ -211,6 +235,9 @@ function createWindow() {
 app.whenReady().then(async () => {
     registerIpcHandlers();
     await startBackendServer();
+    if (!isDev) {
+        await waitForBackendReady(3001);
+    }
     createWindow();
     setupAutoUpdater();
 
