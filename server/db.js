@@ -704,6 +704,30 @@ export const chatLogsDao = {
 
         return { deletedJids: jids };
     },
+    deleteMultipleConversations: (chatJids) => {
+        if (!Array.isArray(chatJids) || chatJids.length === 0) return { deletedJids: [] };
+        const allJids = new Set();
+        for (const jid of chatJids) {
+            const rel = getRelatedJids(jid);
+            for (const r of rel) allJids.add(r);
+        }
+        const jids = Array.from(allJids);
+        if (jids.length === 0) return { deletedJids: [] };
+        const placeholders = jids.map(() => '?').join(',');
+
+        db.prepare(`DELETE FROM chat_logs WHERE from_jid IN (${placeholders}) OR to_jid IN (${placeholders})`).run(...jids, ...jids);
+        db.prepare(`DELETE FROM conversation_status WHERE chat_jid IN (${placeholders})`).run(...jids);
+        db.prepare(`DELETE FROM flow_sessions WHERE chat_jid IN (${placeholders})`).run(...jids);
+        db.prepare(`DELETE FROM conversation_labels WHERE chat_jid IN (${placeholders})`).run(...jids);
+
+        return { deletedJids: jids };
+    },
+    deleteMessage: (id) => {
+        const row = db.prepare('SELECT id, from_jid, to_jid FROM chat_logs WHERE id = ?').get(id);
+        if (!row) return { deleted: false };
+        db.prepare('DELETE FROM chat_logs WHERE id = ?').run(id);
+        return { deleted: true, message: row };
+    },
     getMessagesForJid: (jid, limit = 100) => {
         const jids = getRelatedJids(jid);
         const placeholders = jids.map(() => '?').join(',');

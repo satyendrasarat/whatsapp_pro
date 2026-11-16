@@ -68,9 +68,13 @@ export const LiveChatInbox = () => {
   const [isSavingLabel, setIsSavingLabel] = useState(false);
   const [isTaggingOpen, setIsTaggingOpen] = useState(false);
 
-  // Chat Deletion
+  // Chat Deletion & Bulk Selection
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [selectedJidsForDelete, setSelectedJidsForDelete] = useState(new Set());
+  const [isConfirmingBulkDelete, setIsConfirmingBulkDelete] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [singleDeleteTarget, setSingleDeleteTarget] = useState(null);
 
   // Audio Notifications State
   const [soundOn, setSoundOn] = useState(() => isAudioEnabled());
@@ -145,18 +149,29 @@ export const LiveChatInbox = () => {
   };
 
   // Cross-Identity Matcher (Matches JID, LID, Phone number symmetrically)
-  const isSameContact = (c, targetJid, extraPhone = null) => {
-    if (!c || !targetJid) return false;
-    const cJid = typeof c === 'string' ? c : (c.contact_jid || '');
-    if (cJid === targetJid) return true;
-    const cleanTarget = targetJid.replace(/@.*$/, '').replace(/\D/g, '');
-    const cleanC = cJid.replace(/@.*$/, '').replace(/\D/g, '');
-    if (cleanTarget && cleanTarget === cleanC) return true;
+  const isSameContact = (c, target, extraPhone = null) => {
+    if (!c || !target) return false;
+    const cJid = (typeof c === 'string' ? c : (c.contact_jid || '')).toLowerCase().trim();
+    const targetJid = (typeof target === 'string' ? target : (target.contact_jid || '')).toLowerCase().trim();
+    if (cJid && targetJid && cJid === targetJid) return true;
 
-    const resolved = typeof c === 'object' ? (c.resolved_phone || extraPhone) : extraPhone;
-    if (resolved) {
-      const cleanResolved = String(resolved).replace(/\D/g, '');
-      if (cleanResolved && (cleanResolved === cleanTarget || cleanResolved === cleanC)) return true;
+    const extractDigits = (val) => {
+      if (!val) return '';
+      return String(val).replace(/@.*$/, '').replace(/\D/g, '');
+    };
+
+    const cClean = extractDigits(cJid);
+    const cResolved = typeof c === 'object' && c.resolved_phone ? extractDigits(c.resolved_phone) : '';
+    const cSet = new Set([cClean, cResolved].filter((d) => d.length >= 7));
+
+    const targetClean = extractDigits(targetJid);
+    const targetResolved = typeof target === 'object' && target.resolved_phone 
+      ? extractDigits(target.resolved_phone) 
+      : (extraPhone ? extractDigits(extraPhone) : '');
+    const targetSet = new Set([targetClean, targetResolved].filter((d) => d.length >= 7));
+
+    for (const d of cSet) {
+      if (targetSet.has(d)) return true;
     }
     return false;
   };
@@ -360,6 +375,19 @@ export const LiveChatInbox = () => {
         }
         loadConversations();
         loadLabels();
+      } else if (event.type === 'conversations_bulk_deleted') {
+        if (selectedJidRef.current && event.deletedJids?.some((j) => isSameContact(j, selectedJidRef.current))) {
+          setSelectedJid(null);
+          selectedJidRef.current = null;
+          setMessages([]);
+        }
+        loadConversations();
+        loadLabels();
+      } else if (event.type === 'message_deleted') {
+        if (event.messageId) {
+          setMessages((prev) => prev.filter((m) => m.id !== event.messageId));
+        }
+        loadConversations();
       } else if (event.type === 'labels_updated') {
         loadLabels();
         loadConversations();
@@ -534,6 +562,87 @@ export const LiveChatInbox = () => {
     }
   };
 
+  // Bulk Delete: Toggle select a chat for bulk delete
+  const toggleSelectChat = (jid, e) => {
+    e?.stopPropagation();
+    setSelectedJidsForDelete((prev) => {
+      const next = new Set(prev);
+      if (next.has(jid)) {
+        next.delete(jid);
+      } else {
+        next.add(jid);
+      }
+      return next;
+    });
+  };
+
+  // Select/Deselect all filtered conversations
+  const toggleSelectAll = () => {
+    if (selectedJidsForDelete.size === filteredConversations.length && filteredConversations.length > 0) {
+      setSelectedJidsForDelete(new Set());
+    } else {
+      setSelectedJidsForDelete(new Set(filteredConversations.map((c) => c.contact_jid)));
+    }
+  };
+
+  // Bulk delete selected conversations
+  const handleBulkDelete = async () => {
+    if (selectedJidsForDelete.size === 0) return;
+    setIsBulkDeleting(true);
+    try {
+      const jidsArray = Array.from(selectedJidsForDelete);
+      await api.deleteConversations(jidsArray);
+
+      if (selectedJid && jidsArray.some((j) => isSameContact(j, selectedJid))) {
+        setSelectedJid(null);
+        selectedJidRef.current = null;
+        setMessages([]);
+      }
+
+      setSelectedJidsForDelete(new Set());
+      setIsConfirmingBulkDelete(false);
+      await loadConversations();
+      await loadLabels();
+    } catch (err) {
+      alert(`Failed to delete conversations: ${err.message}`);
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
+
+  // Delete a specific conversation initiated from a sidebar quick delete button
+  const handleConfirmSingleDelete = async () => {
+    if (!singleDeleteTarget) return;
+    setIsDeleting(true);
+    try {
+      await api.deleteConversation(singleDeleteTarget);
+      if (selectedJid && isSameContact(singleDeleteTarget, selectedJid)) {
+        setSelectedJid(null);
+        selectedJidRef.current = null;
+        setMessages([]);
+      }
+      setSingleDeleteTarget(null);
+      await loadConversations();
+      await loadLabels();
+    } catch (err) {
+      alert(`Failed to delete conversation: ${err.message}`);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Delete an individual chat message
+  const handleDeleteChatMessage = async (msgId) => {
+    if (!confirm('Are you sure you want to delete this message?')) return;
+    try {
+      await api.deleteChatMessage(msgId);
+      setMessages((prev) => prev.filter((m) => m.id !== msgId));
+      await loadConversations();
+    } catch (err) {
+      alert(`Failed to delete message: ${err.message}`);
+    }
+  };
+
   // Filter conversations
   const filteredConversations = conversations.filter((c) => {
     const info = getContactDisplay(c);
@@ -704,6 +813,52 @@ export const LiveChatInbox = () => {
           </div>
         </div>
 
+        {/* Bulk Selection / Action Toolbar */}
+        {filteredConversations.length > 0 && (
+          <div className="px-3.5 py-2 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between text-xs">
+            <label className="flex items-center gap-2 cursor-pointer select-none text-slate-300 hover:text-slate-100 font-medium">
+              <input
+                type="checkbox"
+                checked={selectedJidsForDelete.size > 0 && selectedJidsForDelete.size === filteredConversations.length}
+                ref={(el) => {
+                  if (el) {
+                    el.indeterminate = selectedJidsForDelete.size > 0 && selectedJidsForDelete.size < filteredConversations.length;
+                  }
+                }}
+                onChange={toggleSelectAll}
+                className="w-3.5 h-3.5 rounded border-slate-700 bg-slate-800 text-emerald-500 focus:ring-0 focus:ring-offset-0 cursor-pointer"
+              />
+              <span className="text-[11px]">
+                {selectedJidsForDelete.size > 0 
+                  ? `${selectedJidsForDelete.size} selected` 
+                  : `Select All (${filteredConversations.length})`}
+              </span>
+            </label>
+
+            {selectedJidsForDelete.size > 0 && (
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setIsConfirmingBulkDelete(true)}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-rose-950/80 hover:bg-rose-900 border border-rose-500/50 text-rose-300 hover:text-rose-200 text-[11px] font-semibold transition active:scale-95 shadow"
+                  title="Delete all selected conversations"
+                >
+                  <Trash2 className="w-3 h-3 text-rose-400" />
+                  <span>Delete ({selectedJidsForDelete.size})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedJidsForDelete(new Set())}
+                  className="px-2 py-1 rounded-lg text-slate-400 hover:text-slate-200 text-[11px] hover:bg-slate-800 transition"
+                  title="Clear selection"
+                >
+                  Clear
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Conversation List Items */}
         <div className="flex-1 overflow-y-auto divide-y divide-slate-800/60">
           {filteredConversations.length === 0 ? (
@@ -734,12 +889,25 @@ export const LiveChatInbox = () => {
                       human_agent_requested: conv.human_agent_requested
                     });
                   }}
-                  className={`p-3.5 cursor-pointer transition flex items-start gap-3 relative ${
+                  className={`p-3.5 cursor-pointer transition flex items-start gap-2.5 relative group ${
                     isSelected
                       ? 'bg-slate-800/90 border-l-4 border-emerald-500'
                       : 'hover:bg-slate-800/40'
                   }`}
                 >
+                  {/* Select Checkbox */}
+                  <div
+                    onClick={(e) => toggleSelectChat(conv.contact_jid, e)}
+                    className="pt-1 shrink-0"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedJidsForDelete.has(conv.contact_jid)}
+                      onChange={(e) => toggleSelectChat(conv.contact_jid, e)}
+                      className="w-3.5 h-3.5 rounded border-slate-700 bg-slate-800 text-emerald-500 focus:ring-0 focus:ring-offset-0 cursor-pointer"
+                    />
+                  </div>
+
                   {/* Avatar */}
                   <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-slate-800 to-slate-700 border border-slate-700 flex items-center justify-center text-slate-200 font-bold text-xs shrink-0 shadow">
                     {contactInfo.avatarChar}
@@ -758,11 +926,25 @@ export const LiveChatInbox = () => {
                           </span>
                         )}
                       </div>
-                      <span className="text-[10px] text-slate-500 shrink-0 font-mono">
-                        {conv.last_timestamp
-                          ? new Date(conv.last_timestamp.endsWith('Z') ? conv.last_timestamp : conv.last_timestamp + 'Z').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                          : ''}
-                      </span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="text-[10px] text-slate-500 font-mono">
+                          {conv.last_timestamp
+                            ? new Date(conv.last_timestamp.endsWith('Z') ? conv.last_timestamp : conv.last_timestamp + 'Z').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                            : ''}
+                        </span>
+                        {/* Hover Quick Delete Button */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSingleDeleteTarget(conv.contact_jid);
+                          }}
+                          className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-rose-950/80 text-slate-500 hover:text-rose-400 transition"
+                          title="Delete this conversation"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
                     </div>
 
                     <p className="text-[11px] text-slate-400 truncate flex items-center gap-1">
@@ -1052,36 +1234,58 @@ export const LiveChatInbox = () => {
                   return (
                     <div
                       key={msg.id || index}
-                      className={`flex flex-col ${isIncoming ? 'items-start' : 'items-end'}`}
+                      className={`flex flex-col group ${isIncoming ? 'items-start' : 'items-end'}`}
                     >
-                      <div
-                        className={`max-w-[78%] sm:max-w-[65%] rounded-2xl px-4 py-2.5 shadow-md text-xs leading-relaxed font-sans whitespace-pre-wrap break-words ${
-                          isIncoming
-                            ? 'bg-slate-800 text-slate-100 rounded-tl-sm border border-slate-700/60'
-                            : 'bg-emerald-700 text-white rounded-tr-sm shadow-emerald-900/30'
-                        }`}
-                      >
-                        {msg.message_text?.startsWith('🎤 [Voice Note]') && (
-                          <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400 mb-1 pb-1 border-b border-slate-700/50">
-                            <Mic className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-                            <span>Voice Note (Transcribed)</span>
-                          </div>
+                      <div className="flex items-end gap-1.5 max-w-[85%] sm:max-w-[70%]">
+                        {!isIncoming && msg.id && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteChatMessage(msg.id)}
+                            className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-slate-500 hover:text-rose-400 hover:bg-slate-800 transition shrink-0"
+                            title="Delete this message"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
                         )}
-                        {msg.message_text?.startsWith('🎵 [Voice Reply]') && (
-                          <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-200 mb-1 pb-1 border-b border-emerald-600/50">
-                            <Volume2 className="w-3.5 h-3.5 text-emerald-200" />
-                            <span>AI Voice Note Reply</span>
-                          </div>
-                        )}
-                        {msg.message_text?.replace(/^(?:🎤\s*\[Voice Note\]:?\s*|🎵\s*\[Voice Reply\]:?\s*)/i, '') || msg.message_text}
                         <div
-                          className={`flex items-center justify-end gap-1 text-[9px] mt-1 ${
-                            isIncoming ? 'text-slate-400' : 'text-emerald-200'
+                          className={`rounded-2xl px-4 py-2.5 shadow-md text-xs leading-relaxed font-sans whitespace-pre-wrap break-words ${
+                            isIncoming
+                              ? 'bg-slate-800 text-slate-100 rounded-tl-sm border border-slate-700/60'
+                              : 'bg-emerald-700 text-white rounded-tr-sm shadow-emerald-900/30'
                           }`}
                         >
-                          <span>{timeFormatted}</span>
-                          {!isIncoming && <CheckCheck className="w-3 h-3 text-emerald-200" />}
+                          {msg.message_text?.startsWith('🎤 [Voice Note]') && (
+                            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400 mb-1 pb-1 border-b border-slate-700/50">
+                              <Mic className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+                              <span>Voice Note (Transcribed)</span>
+                            </div>
+                          )}
+                          {msg.message_text?.startsWith('🎵 [Voice Reply]') && (
+                            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-200 mb-1 pb-1 border-b border-emerald-600/50">
+                              <Volume2 className="w-3.5 h-3.5 text-emerald-200" />
+                              <span>AI Voice Note Reply</span>
+                            </div>
+                          )}
+                          {msg.message_text?.replace(/^(?:🎤\s*\[Voice Note\]:?\s*|🎵\s*\[Voice Reply\]:?\s*)/i, '') || msg.message_text}
+                          <div
+                            className={`flex items-center justify-end gap-1 text-[9px] mt-1 ${
+                              isIncoming ? 'text-slate-400' : 'text-emerald-200'
+                            }`}
+                          >
+                            <span>{timeFormatted}</span>
+                            {!isIncoming && <CheckCheck className="w-3 h-3 text-emerald-200" />}
+                          </div>
                         </div>
+                        {isIncoming && msg.id && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteChatMessage(msg.id)}
+                            className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-slate-500 hover:text-rose-400 hover:bg-slate-800 transition shrink-0"
+                            title="Delete this message"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
@@ -1184,6 +1388,96 @@ export const LiveChatInbox = () => {
                   <>
                     <Trash2 className="w-3.5 h-3.5" />
                     <span>Delete Conversation</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Delete Conversations Confirmation Modal */}
+      {isConfirmingBulkDelete && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="w-12 h-12 rounded-2xl bg-rose-950/80 border border-rose-500/40 flex items-center justify-center text-rose-400 mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div className="text-center space-y-1">
+              <h3 className="text-base font-bold text-slate-100">Delete {selectedJidsForDelete.size} Selected Conversations?</h3>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                This will permanently remove all message logs, automated bot sessions, and label assignments for the {selectedJidsForDelete.size} selected chats. This action cannot be undone.
+              </p>
+            </div>
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsConfirmingBulkDelete(false)}
+                disabled={isBulkDeleting}
+                className="flex-1 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleBulkDelete}
+                disabled={isBulkDeleting}
+                className="flex-1 px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold shadow-lg shadow-rose-900/30 transition flex items-center justify-center gap-2"
+              >
+                {isBulkDeleting ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete {selectedJidsForDelete.size} Chats</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Single Conversation Quick Delete Confirmation Modal */}
+      {singleDeleteTarget && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="w-12 h-12 rounded-2xl bg-rose-950/80 border border-rose-500/40 flex items-center justify-center text-rose-400 mx-auto">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <div className="text-center space-y-1">
+              <h3 className="text-base font-bold text-slate-100">Delete Conversation?</h3>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Are you sure you want to permanently delete all messages and history with this contact? This action cannot be undone.
+              </p>
+            </div>
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setSingleDeleteTarget(null)}
+                disabled={isDeleting}
+                className="flex-1 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmSingleDelete}
+                disabled={isDeleting}
+                className="flex-1 px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold shadow-lg shadow-rose-900/30 transition flex items-center justify-center gap-2"
+              >
+                {isDeleting ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Yes, Delete Chat</span>
                   </>
                 )}
               </button>

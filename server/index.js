@@ -1069,6 +1069,45 @@ app.delete('/api/chat/conversations/:jid', (req, res) => {
     }
 });
 
+// Bulk delete multiple chat conversations at once
+app.post('/api/chat/conversations/bulk-delete', (req, res) => {
+    try {
+        const { jids } = req.body;
+        if (!Array.isArray(jids) || jids.length === 0) {
+            return res.status(400).json({ error: 'Array of JIDs is required' });
+        }
+        const result = chatLogsDao.deleteMultipleConversations(jids);
+        engineHost.broadcast({
+            type: 'conversations_bulk_deleted',
+            deletedJids: result.deletedJids
+        });
+        res.json({ success: true, ...result });
+    } catch (e) {
+        console.error('Error bulk deleting conversations:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// Delete individual chat message
+app.delete('/api/chat/messages/:id', (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (!id) return res.status(400).json({ error: 'Valid message ID is required' });
+        const result = chatLogsDao.deleteMessage(id);
+        if (result.deleted) {
+            engineHost.broadcast({
+                type: 'message_deleted',
+                messageId: id,
+                chatJid: result.message?.from_jid !== 'me' ? result.message?.from_jid : result.message?.to_jid
+            });
+        }
+        res.json({ success: true, ...result });
+    } catch (e) {
+        console.error('Error deleting message:', e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // Custom Chat Labels & Tags API
 app.get('/api/chat/labels', (req, res) => {
     try {

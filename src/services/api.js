@@ -406,6 +406,19 @@ class ApiService {
     });
   }
 
+  deleteConversations(jids) {
+    return this.request('/chat/conversations/bulk-delete', {
+      method: 'POST',
+      body: JSON.stringify({ jids })
+    });
+  }
+
+  deleteChatMessage(id) {
+    return this.request(`/chat/messages/${encodeURIComponent(id)}`, {
+      method: 'DELETE'
+    });
+  }
+
   getChatLabels() {
     return this.request('/chat/labels');
   }
