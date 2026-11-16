@@ -1,6 +1,6 @@
 {
   "name": "whatsapp-crm-automation",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "WhatsApp Automation & CRM Desktop Platform with Baileys, SQLite, Visual Flow Builder, and AI Agent",
   "main": "electron/main.js",
   "type": "module",
