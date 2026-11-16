@@ -1,0 +1,23 @@
+const { contextBridge, ipcRenderer } = require('electron');
+
+contextBridge.exposeInMainWorld('electronAPI', {
+    platform: process.platform,
+    versions: {
+        node: process.versions.node,
+        chrome: process.versions.chrome,
+        electron: process.versions.electron
+    },
+    send: (channel, data) => {
+        const validChannels = ['toMain'];
+        if (validChannels.includes(channel)) {
+            ipcRenderer.send(channel, data);
+        }
+    },
+    receive: (channel, func) => {
+        const validChannels = ['fromMain', 'session_status', 'incoming_msg'];
+        if (validChannels.includes(channel)) {
+            ipcRenderer.on(channel, (event, ...args) => func(...args));
+        }
+    }
+});
+
