@@ -153,7 +153,7 @@ if (flowCount && flowCount.count === 0) {
     db.prepare(`
         INSERT INTO flows (name, trigger_keyword, is_fallback, nodes_graph, edges_graph, is_active)
         VALUES (?, ?, ?, ?, ?, ?)
-    `).run('Welcome & Sales Menu Flow', 'hello,hi,start,menu', 1, JSON.stringify(sampleNodes), JSON.stringify(sampleEdges), 1);
+    `).run('Welcome & Sales Menu Flow', 'hello,hi,start,menu', 0, JSON.stringify(sampleNodes), JSON.stringify(sampleEdges), 1);
 }
 
 // Ensure Default AI Guardrail Template always exists in flows (Inactive by default)
@@ -1103,7 +1103,7 @@ export function factoryResetDatabase() {
         db.prepare(`
             INSERT INTO flows (name, trigger_keyword, is_fallback, nodes_graph, edges_graph, is_active)
             VALUES (?, ?, ?, ?, ?, ?)
-        `).run('Welcome & Sales Menu Flow', 'hello,hi,start,menu', 1, JSON.stringify(sampleNodes), JSON.stringify(sampleEdges), 1);
+        `).run('Welcome & Sales Menu Flow', 'hello,hi,start,menu', 0, JSON.stringify(sampleNodes), JSON.stringify(sampleEdges), 1);
 
         // 5. Seed default AI Concierge Template (Inactive)
         const aiTemplateNodes = [

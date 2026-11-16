@@ -1,4 +1,4 @@
-import { flowsDao, flowSessionsDao, chatLogsDao, conversationStatusDao, lidMappingsDao } from './db.js';
+import { flowsDao, flowSessionsDao, chatLogsDao, conversationStatusDao, lidMappingsDao, settingsDao } from './db.js';
 
 export class FlowEngine {
     constructor(aiEngine = null) {
@@ -317,7 +317,7 @@ export class FlowEngine {
             const normDraft = {
                 id: draftFlow.id || 'draft',
                 name: draftFlow.name || 'Draft Flow',
-                trigger_keyword: draftFlow.trigger_keyword || '*',
+                trigger_keyword: (draftFlow.trigger_keyword || '').trim(),
                 is_active: 1,
                 nodes_graph: draftNodes,
                 edges_graph: draftEdges
@@ -335,14 +335,21 @@ export class FlowEngine {
             } else {
                 // Check if message matches draft flow trigger
                 const trg = draftNodes.find(n => n.type === 'trigger');
-                const kws = (trg?.data?.keyword || normDraft.trigger_keyword || '').split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
+                const rawKws = trg?.data?.keyword !== undefined ? trg.data.keyword : normDraft.trigger_keyword;
+                const kws = (rawKws || '').split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
                 const cleaned = this.cleanText(messageText);
-                const matches = kws.includes('*') || kws.includes('any') || kws.includes('all') || kws.some(k => cleaned === k || this.matchesWord(cleaned, k));
+                const matches = kws.includes('*') || kws.includes('any') || kws.includes('all') || kws.includes('catchall') || kws.some(k => cleaned === k || this.matchesWord(cleaned, k));
                 if (matches) {
                     flow = normDraft;
                     currentNode = this.findStartNode(draftNodes, draftEdges);
                     variables = {};
                     flowSessionsDao.clear(fromJid);
+                } else {
+                    // In simulation mode: the user is testing THIS specific draft flow!
+                    // If the message does not match the draft flow keywords and is not a wildcard,
+                    // STOP execution and do NOT fall through to database flows or other bots!
+                    const keywordListStr = kws.length ? kws.map(k => `"${k}"`).join(', ') : 'None';
+                    return `⚠️ No trigger matched for "${messageText}".\n\n📌 Trigger Keyword(s): ${keywordListStr}\n(Send one of the matching keywords above to trigger this flow, or add * to match any message.)`;
                 }
             }
         }
@@ -385,11 +392,14 @@ export class FlowEngine {
             flowSessionsDao.clear(fromJid);
         }
 
-        // 3. If no active session or expired, match fresh flow from message (allowing wildcard * and fallback)
+        // 3. If no active session or expired, match fresh flow from message
         if (!flow || !currentNode) {
-            flow = this.findMatchingFlow(messageText, true, true);
+            const settings = settingsDao.getAll();
+            const isStrictMode = settings.auto_responder_mode === 'flows_only';
+            // In strict mode (flows_only), do NOT allow fallback flows! Only match if keywords or explicit wildcard * matches.
+            flow = this.findMatchingFlow(messageText, true, !isStrictMode);
             if (!flow) {
-                return null; // Hand off to AI Assistant or Agent
+                return null; // No match
             }
 
             const { nodes, edges } = this.parseGraph(flow);

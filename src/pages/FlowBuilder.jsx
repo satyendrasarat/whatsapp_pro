@@ -742,7 +742,7 @@ export const FlowBuilder = () => {
     const draftFlow = {
       id: selectedFlowId || 'draft',
       name: flowName || 'Draft Flow',
-      trigger_keyword: effectiveTriggerKeywords || '*',
+      trigger_keyword: (effectiveTriggerKeywords || '').trim(),
       nodes_graph: nodes,
       edges_graph: edges,
       is_active: 1
@@ -1254,19 +1254,39 @@ export const FlowBuilder = () => {
               </div>
 
               {selectedNode.type === 'trigger' && (
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-400 mb-1">
-                    Keywords to Match
-                  </label>
-                  <input
-                    type="text"
-                    value={selectedNode.data?.keyword || ''}
-                    onChange={(e) => updateSelectedNodeData('keyword', e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 font-mono"
-                  />
-                  <p className="text-[10px] text-slate-500 mt-1">
-                    Separate multiple trigger words with commas. Use <strong className="text-emerald-400">*</strong> to match <em>any</em> message (catch-all wildcard trigger).
-                  </p>
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                      Keywords to Match
+                    </label>
+                    <input
+                      type="text"
+                      value={selectedNode.data?.keyword || ''}
+                      onChange={(e) => updateSelectedNodeData('keyword', e.target.value)}
+                      placeholder="e.g. hello, hi, menu"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 font-mono"
+                    />
+                    <p className="text-[10px] text-slate-500 mt-1">
+                      Separate multiple trigger words with commas. Use <strong className="text-emerald-400">*</strong> to match <em>any</em> message (catch-all wildcard trigger).
+                    </p>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-800">
+                    <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={isFallback}
+                        onChange={(e) => setIsFallback(e.target.checked)}
+                        className="w-4 h-4 rounded border-slate-700 bg-slate-800 text-emerald-500 focus:ring-0 focus:ring-offset-0 cursor-pointer mt-0.5 accent-emerald-500"
+                      />
+                      <div>
+                        <span className="text-xs font-semibold text-slate-200">Default Catch-All Fallback</span>
+                        <p className="text-[10px] text-slate-400 leading-relaxed">
+                          When checked, this flow triggers as fallback when no other keyword matches. (Leave unchecked for strict keyword matching).
+                        </p>
+                      </div>
+                    </label>
+                  </div>
                 </div>
               )}
 
