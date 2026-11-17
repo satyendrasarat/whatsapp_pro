@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import http from 'node:http';
@@ -166,6 +166,25 @@ function registerIpcHandlers() {
 
     ipcMain.handle('get-app-version', () => {
         return app.getVersion();
+    });
+
+    ipcMain.handle('open-file-dialog', async (event, options = {}) => {
+        const win = BrowserWindow.getFocusedWindow() || mainWindow;
+        const result = await dialog.showOpenDialog(win, {
+            title: options.title || 'Select File to Attach',
+            properties: ['openFile'],
+            filters: options.filters || [
+                { name: 'All Supported Attachments', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'pdf', 'json', 'csv', 'xlsx', 'xls', 'docx', 'doc', 'txt', 'zip', 'rar', '7z', 'mp4', 'mov', 'avi', 'mkv', 'mp3', 'wav', 'ogg'] },
+                { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'] },
+                { name: 'Documents', extensions: ['pdf', 'json', 'csv', 'xlsx', 'xls', 'docx', 'doc', 'txt', 'zip', 'rar', '7z'] },
+                { name: 'Media (Video / Audio)', extensions: ['mp4', 'mov', 'avi', 'mkv', 'mp3', 'wav', 'ogg'] },
+                { name: 'All Files (*.*)', extensions: ['*'] }
+            ]
+        });
+        if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
+            return null;
+        }
+        return result.filePaths[0];
     });
 }
 

@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { api } from '../services/api';
 import Modal from './Modal';
+import { pickAttachmentFile } from '../utils/filePicker';
 
 export const Header = ({
   title,
@@ -82,15 +83,42 @@ export const Header = ({
     if (onCloseQuickDispatch) onCloseQuickDispatch();
   };
 
-  const handleFileSelect = (e) => {
+  const handleBrowseAttachment = async () => {
+    try {
+      const picked = await pickAttachmentFile({
+        title: 'Select Media or Document to Attach'
+      });
+      if (picked?.filePath) {
+        setMediaUrl(picked.filePath.replace(/^["']+|["']+$/g, ''));
+        setFormError('');
+      }
+    } catch (err) {
+      console.error('File pick failed:', err);
+    }
+  };
+
+  const handleFileSelect = async (e) => {
     const file = e.target.files?.[0];
     if (file) {
-      // In Electron runtime, file.path contains the absolute local disk path
-      const filePath = file.path || file.name;
-      setMediaUrl(filePath.replace(/^["']+|["']+$/g, ''));
-      setFormError('');
+      if (window.electronAPI?.getPathForFile) {
+        const p = window.electronAPI.getPathForFile(file);
+        if (p && (p.includes('/') || p.includes('\\'))) {
+          setMediaUrl(p.replace(/^["']+|["']+$/g, ''));
+          setFormError('');
+          e.target.value = '';
+          return;
+        }
+      }
+      try {
+        const uploadRes = await api.uploadFile(file);
+        if (uploadRes?.filePath) {
+          setMediaUrl(uploadRes.filePath.replace(/^["']+|["']+$/g, ''));
+          setFormError('');
+        }
+      } catch (err) {
+        setMediaUrl(file.name);
+      }
     }
-    // Reset file input so user can pick the same file again if desired
     e.target.value = '';
   };
 
@@ -436,8 +464,8 @@ export const Header = ({
               </label>
               <button
                 type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="text-[11px] font-medium text-emerald-400 hover:text-emerald-300 flex items-center gap-1.5 bg-emerald-950/60 hover:bg-emerald-900/60 border border-emerald-500/30 px-2.5 py-1 rounded-lg transition"
+                onClick={handleBrowseAttachment}
+                className="text-[11px] font-medium text-emerald-400 hover:text-emerald-300 flex items-center gap-1.5 bg-emerald-950/60 hover:bg-emerald-900/60 border border-emerald-500/30 px-2.5 py-1 rounded-lg transition active:scale-95 cursor-pointer"
               >
                 <FolderOpen className="w-3.5 h-3.5" />
                 <span>Browse File...</span>

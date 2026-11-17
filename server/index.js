@@ -61,6 +61,30 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
+const UPLOADS_DIR = process.env.CRM_USER_DATA_DIR
+    ? path.join(process.env.CRM_USER_DATA_DIR, 'uploads')
+    : path.join(__dirname, '..', 'uploads');
+if (!fs.existsSync(UPLOADS_DIR)) {
+    fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+}
+
+app.post('/api/upload', (req, res) => {
+    try {
+        const { fileName, fileData } = req.body;
+        if (!fileName || !fileData) {
+            return res.status(400).json({ error: 'fileName and fileData (base64 string) are required' });
+        }
+        const base64Data = fileData.replace(/^data:[^;]+;base64,/, '');
+        const safeName = `${Date.now()}-${path.basename(fileName).replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+        const filePath = path.join(UPLOADS_DIR, safeName);
+        fs.writeFileSync(filePath, Buffer.from(base64Data, 'base64'));
+        res.json({ success: true, filePath, fileName });
+    } catch (err) {
+        console.error('File upload error:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', uptime: process.uptime(), version: process.env.APP_VERSION || '1.0.0' });
 });
@@ -417,6 +441,13 @@ app.post('/api/campaigns', (req, res) => {
     }
 
     try {
+        const cleanMediaPath = media_path ? media_path.trim().replace(/^["']+|["']+$/g, '') : null;
+        if (cleanMediaPath && !cleanMediaPath.startsWith('http://') && !cleanMediaPath.startsWith('https://')) {
+            if (!fs.existsSync(cleanMediaPath)) {
+                return res.status(400).json({ error: `Attachment file not found at: "${cleanMediaPath}". Please verify the file path exists on your PC.` });
+            }
+        }
+
         const members = listsDao.getMembers(list_id);
         if (members.length === 0) {
             return res.status(400).json({ error: 'Selected list has 0 contacts' });
@@ -427,7 +458,7 @@ app.post('/api/campaigns', (req, res) => {
             list_id,
             session_id,
             template_text,
-            media_path,
+            media_path: cleanMediaPath,
             delay_min_seconds: parseInt(delay_min_seconds, 10) || 5,
             delay_max_seconds: parseInt(delay_max_seconds, 10) || 18,
             batch_count: parseInt(batch_count, 10) || 15,
@@ -444,7 +475,7 @@ app.post('/api/campaigns', (req, res) => {
             recipient_phone: m.phone,
             recipient_name: m.name || '',
             message_text: template_text,
-            media_url: media_path
+            media_url: cleanMediaPath
         }));
         messagesDao.bulkCreate(msgs);
 

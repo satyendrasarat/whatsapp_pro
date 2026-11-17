@@ -17,11 +17,15 @@ import {
   RefreshCw,
   ShieldCheck,
   Timer,
-  Zap
+  Zap,
+  Paperclip,
+  FolderOpen,
+  X
 } from 'lucide-react';
 import { api } from '../services/api';
 import StatusBadge from '../components/StatusBadge';
 import Modal from '../components/Modal';
+import { pickAttachmentFile } from '../utils/filePicker';
 
 export const Campaigns = ({ liveSessions = [] }) => {
   const [campaigns, setCampaigns] = useState([]);
@@ -640,17 +644,68 @@ export const Campaigns = ({ liveSessions = [] }) => {
             />
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">
-              Optional Media File Path (Image or PDF)
-            </label>
-            <input
-              type="text"
-              placeholder="e.g. C:\Users\user\Desktop\brochure.pdf"
-              value={form.media_path}
-              onChange={(e) => setForm({ ...form, media_path: e.target.value })}
-              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 font-mono"
-            />
+          {/* Optional Media Attachment */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                <Paperclip className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Media / Document Attachment (Optional)</span>
+              </label>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    const picked = await pickAttachmentFile({
+                      title: 'Select Attachment for Campaign (All formats supported)'
+                    });
+                    if (picked?.filePath) {
+                      setForm({ ...form, media_path: picked.filePath.replace(/^["']+|["']+$/g, '') });
+                    }
+                  } catch (err) {
+                    console.error('File pick failed:', err);
+                  }
+                }}
+                className="text-[11px] font-medium text-emerald-400 hover:text-emerald-300 flex items-center gap-1.5 bg-emerald-950/60 hover:bg-emerald-900/60 border border-emerald-500/30 px-2.5 py-1 rounded-lg transition active:scale-95 cursor-pointer"
+              >
+                <FolderOpen className="w-3.5 h-3.5" />
+                <span>Browse File...</span>
+              </button>
+            </div>
+
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Click Browse File or paste path (PNG, JPG, JSON, PDF, CSV, XLSX, etc.)"
+                value={form.media_path}
+                onChange={(e) => setForm({ ...form, media_path: e.target.value.replace(/^["']+|["']+$/g, '') })}
+                className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-3 pr-8 py-2 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 font-mono"
+              />
+              {form.media_path && (
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, media_path: '' })}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-400 transition"
+                  title="Remove attachment"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {form.media_path && (
+              <div className="flex items-center gap-2 px-2.5 py-1.5 bg-slate-900/90 border border-emerald-500/30 rounded-lg text-[11px] text-slate-300">
+                <span className="text-emerald-400 font-medium">Attached:</span>
+                <span className="truncate flex-1 font-mono text-slate-200">
+                  {form.media_path.split(/[/\\]/).pop()}
+                </span>
+                <span className="text-[10px] uppercase font-bold text-slate-500">
+                  {form.media_path.split('.').pop()}
+                </span>
+              </div>
+            )}
+            <p className="text-[10px] text-slate-400">
+              Supports Images (.png, .jpg), Documents (.json, .pdf, .csv, .xlsx, .docx, .txt), Videos (.mp4), and Audio (.mp3).
+            </p>
           </div>
 
           <div className="p-3.5 bg-emerald-950/40 border border-emerald-500/30 rounded-xl text-xs text-emerald-300 space-y-1.5">

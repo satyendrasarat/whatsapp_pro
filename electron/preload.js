@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
     platform: process.platform,
@@ -20,6 +20,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
         }
     },
     checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
-    quitAndInstall: () => ipcRenderer.invoke('quit-and-install')
+    quitAndInstall: () => ipcRenderer.invoke('quit-and-install'),
+    openFileDialog: (options) => ipcRenderer.invoke('open-file-dialog', options),
+    getPathForFile: (file) => {
+        try {
+            if (webUtils && typeof webUtils.getPathForFile === 'function') {
+                return webUtils.getPathForFile(file);
+            }
+        } catch (e) {
+            console.warn('[Preload] getPathForFile failed:', e);
+        }
+        return file?.path || '';
+    }
 });
 

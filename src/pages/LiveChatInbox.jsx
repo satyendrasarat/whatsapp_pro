@@ -26,10 +26,12 @@ import {
   AlertTriangle,
   Volume2,
   VolumeX,
-  Mic
+  Mic,
+  Paperclip
 } from 'lucide-react';
 import { api } from '../services/api';
 import { playIncomingBeep, playNeedsHumanAlert, isAudioEnabled, setAudioEnabled } from '../utils/soundEffects';
+import { pickAttachmentFile } from '../utils/filePicker';
 
 const PRESET_COLORS = [
   { name: 'Emerald', value: '#10b981' },
@@ -48,6 +50,7 @@ export const LiveChatInbox = () => {
   const [selectedJid, setSelectedJid] = useState(null);
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
+  const [attachment, setAttachment] = useState(null); // { filePath, fileName }
   const [searchQuery, setSearchQuery] = useState('');
   const [filterTab, setFilterTab] = useState('all'); // 'all', 'needs_human', 'bot_paused', 'bot_active' or custom label name
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
@@ -408,16 +411,34 @@ export const LiveChatInbox = () => {
     }, 100);
   };
 
+  const handleAttachFile = async () => {
+    try {
+      const picked = await pickAttachmentFile({
+        title: 'Select Attachment for Chat (All formats supported)'
+      });
+      if (picked?.filePath) {
+        setAttachment(picked);
+      }
+    } catch (err) {
+      console.error('Attach file failed:', err);
+    }
+  };
+
   const handleSendMessage = async (e) => {
     if (e) e.preventDefault();
-    if (!inputText.trim() || !selectedJid || isSending) return;
+    if ((!inputText.trim() && !attachment) || !selectedJid || isSending) return;
 
     const messageText = inputText.trim();
+    const mediaUrl = attachment?.filePath || null;
+    const mediaName = attachment?.fileName || (mediaUrl ? mediaUrl.split(/[/\\]/).pop() : '');
+
     setInputText('');
+    setAttachment(null);
     setIsSending(true);
 
     try {
-      await api.sendDirectMessage(selectedJid, messageText);
+      await api.sendDirectMessage(selectedJid, messageText, 'default', mediaUrl);
+      const displayContent = messageText || `📎 [Attachment: ${mediaName}]`;
       // Append optimistically to messages list
       setMessages((prev) => [
         ...prev,
@@ -425,7 +446,7 @@ export const LiveChatInbox = () => {
           id: Date.now(),
           from_jid: 'me',
           to_jid: selectedJid,
-          message_text: messageText,
+          message_text: displayContent,
           direction: 'outgoing',
           timestamp: new Date().toISOString()
         }
@@ -1274,6 +1295,12 @@ export const LiveChatInbox = () => {
                               <span>AI Voice Note Reply</span>
                             </div>
                           )}
+                          {msg.message_text?.includes('📎 [Attachment:') && (
+                            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-200 mb-1 pb-1 border-b border-emerald-600/50">
+                              <Paperclip className="w-3.5 h-3.5" />
+                              <span>Media / Document Attachment</span>
+                            </div>
+                          )}
                           {msg.message_text?.replace(/^(?:🎤\s*\[Voice Note\]:?\s*|🎵\s*\[Voice Reply\]:?\s*)/i, '') || msg.message_text}
                           <div
                             className={`flex items-center justify-end gap-1 text-[9px] mt-1 ${
@@ -1302,11 +1329,45 @@ export const LiveChatInbox = () => {
               <div ref={messagesEndRef} />
             </div>
 
+            {/* Attachment preview banner */}
+            {attachment && (
+              <div className="px-5 py-2 bg-slate-950/95 border-t border-slate-800 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2 overflow-hidden">
+                  <div className="w-6 h-6 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                    <Paperclip className="w-3.5 h-3.5" />
+                  </div>
+                  <span className="text-slate-200 font-mono text-[11px] truncate">
+                    {attachment.fileName || attachment.filePath.split(/[/\\]/).pop()}
+                  </span>
+                  <span className="text-[10px] uppercase font-bold text-slate-500 px-1.5 py-0.5 bg-slate-800 rounded">
+                    {attachment.filePath.split('.').pop()}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAttachment(null)}
+                  className="p-1 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition cursor-pointer"
+                  title="Remove attachment"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
             {/* Chat Composer */}
             <form
               onSubmit={handleSendMessage}
-              className="p-3.5 px-5 bg-slate-900 border-t border-slate-800 flex items-center gap-3 shrink-0"
+              className="p-3.5 px-5 bg-slate-900 border-t border-slate-800 flex items-center gap-2.5 shrink-0"
             >
+              <button
+                type="button"
+                onClick={handleAttachFile}
+                className="w-10 h-10 rounded-2xl bg-slate-950 hover:bg-slate-850 border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-emerald-400 flex items-center justify-center transition active:scale-95 shrink-0 cursor-pointer"
+                title="Attach file (PNG, JPG, JSON, PDF, CSV, XLSX, etc.)"
+              >
+                <Paperclip className="w-4 h-4" />
+              </button>
+
               <textarea
                 rows={1}
                 value={inputText}
@@ -1317,14 +1378,18 @@ export const LiveChatInbox = () => {
                     handleSendMessage();
                   }
                 }}
-                placeholder={`Type a message to ${selectedContactInfo.name}... (Press Enter to send)`}
+                placeholder={
+                  attachment
+                    ? `Add caption (optional) & press Enter to dispatch attachment...`
+                    : `Type a message to ${selectedContactInfo.name}... (Press Enter to send)`
+                }
                 className="flex-1 bg-slate-950 border border-slate-800 rounded-2xl px-4 py-2.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 resize-none font-sans leading-relaxed"
               />
 
               <button
                 type="submit"
-                disabled={!inputText.trim() || isSending}
-                className="h-10 px-4 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:hover:bg-emerald-600 text-white text-xs font-bold rounded-2xl flex items-center justify-center gap-1.5 transition shadow-lg shadow-emerald-600/30 active:scale-95 shrink-0"
+                disabled={(!inputText.trim() && !attachment) || isSending}
+                className="h-10 px-4 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:hover:bg-emerald-600 text-white text-xs font-bold rounded-2xl flex items-center justify-center gap-1.5 transition shadow-lg shadow-emerald-600/30 active:scale-95 shrink-0 cursor-pointer"
               >
                 {isSending ? (
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />

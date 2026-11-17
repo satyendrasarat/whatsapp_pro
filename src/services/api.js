@@ -102,6 +102,28 @@ class ApiService {
     });
   }
 
+  uploadFile(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        try {
+          const res = await this.request('/upload', {
+            method: 'POST',
+            body: JSON.stringify({
+              fileName: file.name,
+              fileData: reader.result
+            })
+          });
+          resolve(res);
+        } catch (err) {
+          reject(err);
+        }
+      };
+      reader.onerror = (err) => reject(err);
+      reader.readAsDataURL(file);
+    });
+  }
+
   // Contacts
   getContacts(listId = null) {
     return this.request(listId ? `/contacts?list_id=${listId}` : '/contacts');
