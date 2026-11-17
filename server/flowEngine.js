@@ -338,7 +338,8 @@ export class FlowEngine {
                 const rawKws = trg?.data?.keyword !== undefined ? trg.data.keyword : normDraft.trigger_keyword;
                 const kws = (rawKws || '').split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
                 const cleaned = this.cleanText(messageText);
-                const matches = kws.includes('*') || kws.includes('any') || kws.includes('all') || kws.includes('catchall') || kws.some(k => cleaned === k || this.matchesWord(cleaned, k));
+                const isDraftFallback = normDraft.is_fallback === 1 || draftFlow.is_fallback === 1 || trg?.data?.is_fallback === true;
+                const matches = isDraftFallback || kws.includes('*') || kws.includes('any') || kws.includes('all') || kws.includes('catchall') || kws.some(k => cleaned === k || this.matchesWord(cleaned, k));
                 if (matches) {
                     flow = normDraft;
                     currentNode = this.findStartNode(draftNodes, draftEdges);
@@ -394,10 +395,8 @@ export class FlowEngine {
 
         // 3. If no active session or expired, match fresh flow from message
         if (!flow || !currentNode) {
-            const settings = settingsDao.getAll();
-            const isStrictMode = settings.auto_responder_mode === 'flows_only';
-            // In strict mode (flows_only), do NOT allow fallback flows! Only match if keywords or explicit wildcard * matches.
-            flow = this.findMatchingFlow(messageText, true, !isStrictMode);
+            // Match flow: check exact keywords, wildcard *, and explicit user-configured fallback flow
+            flow = this.findMatchingFlow(messageText, true, true);
             if (!flow) {
                 return null; // No match
             }

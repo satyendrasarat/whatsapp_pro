@@ -743,6 +743,7 @@ export const FlowBuilder = () => {
       id: selectedFlowId || 'draft',
       name: flowName || 'Draft Flow',
       trigger_keyword: (effectiveTriggerKeywords || '').trim(),
+      is_fallback: isFallback ? 1 : 0,
       nodes_graph: nodes,
       edges_graph: edges,
       is_active: 1
