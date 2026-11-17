@@ -648,29 +648,126 @@ export class EngineHost {
         }
 
         let result;
+        let cleanFileName = '';
         if (mediaUrl) {
-            // Check if media is local file path
-            if (fs.existsSync(mediaUrl)) {
-                const ext = path.extname(mediaUrl).toLowerCase();
-                const buffer = fs.readFileSync(mediaUrl);
+            let cleanPath = typeof mediaUrl === 'string' ? mediaUrl.trim() : '';
+            // Strip leading and trailing quotes (very common when copying path from Windows Explorer)
+            cleanPath = cleanPath.replace(/^["']+|["']+$/g, '').trim();
+            if (cleanPath.startsWith('file:///')) {
+                cleanPath = decodeURIComponent(cleanPath.replace(/^file:\/\/\//, ''));
+            }
 
-                if (['.jpg', '.jpeg', '.png', '.webp'].includes(ext)) {
+            const isRemoteUrl = cleanPath.startsWith('http://') || cleanPath.startsWith('https://');
+
+            if (!isRemoteUrl && !fs.existsSync(cleanPath)) {
+                throw new Error(`Attachment file not found at: "${cleanPath}". Please verify the file path exists on your PC.`);
+            }
+
+            cleanFileName = path.basename(cleanPath);
+            const ext = path.extname(cleanPath).toLowerCase();
+
+            const mimeLookup = {
+                // Images
+                '.jpg': 'image/jpeg',
+                '.jpeg': 'image/jpeg',
+                '.png': 'image/png',
+                '.webp': 'image/webp',
+                '.gif': 'image/gif',
+                '.bmp': 'image/bmp',
+                '.svg': 'image/svg+xml',
+                // Data & Documents
+                '.json': 'application/json',
+                '.pdf': 'application/pdf',
+                '.csv': 'text/csv',
+                '.txt': 'text/plain',
+                '.xml': 'application/xml',
+                '.html': 'text/html',
+                '.htm': 'text/html',
+                '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                '.doc': 'application/msword',
+                '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                '.xls': 'application/vnd.ms-excel',
+                '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                '.ppt': 'application/vnd.ms-powerpoint',
+                // Archives
+                '.zip': 'application/zip',
+                '.rar': 'application/x-rar-compressed',
+                '.7z': 'application/x-7z-compressed',
+                '.tar': 'application/x-tar',
+                '.gz': 'application/gzip',
+                // Videos
+                '.mp4': 'video/mp4',
+                '.mov': 'video/quicktime',
+                '.avi': 'video/x-msvideo',
+                '.mkv': 'video/x-matroska',
+                '.webm': 'video/webm',
+                // Audio
+                '.mp3': 'audio/mpeg',
+                '.wav': 'audio/wav',
+                '.ogg': 'audio/ogg',
+                '.m4a': 'audio/mp4',
+                '.aac': 'audio/aac'
+            };
+
+            const mimeType = mimeLookup[ext] || 'application/octet-stream';
+            const imageExts = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.svg'];
+            const videoExts = ['.mp4', '.mov', '.avi', '.mkv', '.webm'];
+            const audioExts = ['.mp3', '.wav', '.ogg', '.m4a', '.aac'];
+
+            if (isRemoteUrl) {
+                if (imageExts.includes(ext)) {
                     result = await session.sock.sendMessage(jid, {
-                        image: buffer,
-                        caption: message
+                        image: { url: cleanPath },
+                        caption: message || ''
                     });
-                } else if (['.pdf', '.docx', '.xlsx', '.csv', '.zip'].includes(ext)) {
+                } else if (videoExts.includes(ext)) {
                     result = await session.sock.sendMessage(jid, {
-                        document: buffer,
-                        mimetype: 'application/octet-stream',
-                        fileName: path.basename(mediaUrl),
-                        caption: message
+                        video: { url: cleanPath },
+                        caption: message || ''
+                    });
+                } else if (audioExts.includes(ext)) {
+                    result = await session.sock.sendMessage(jid, {
+                        audio: { url: cleanPath },
+                        mimetype: mimeType,
+                        ptt: false
                     });
                 } else {
-                    result = await session.sock.sendMessage(jid, { text: message });
+                    result = await session.sock.sendMessage(jid, {
+                        document: { url: cleanPath },
+                        mimetype: mimeType,
+                        fileName: cleanFileName || 'document',
+                        caption: message || ''
+                    });
                 }
             } else {
-                result = await session.sock.sendMessage(jid, { text: message });
+                const buffer = fs.readFileSync(cleanPath);
+
+                if (imageExts.includes(ext)) {
+                    result = await session.sock.sendMessage(jid, {
+                        image: buffer,
+                        caption: message || ''
+                    });
+                } else if (videoExts.includes(ext)) {
+                    result = await session.sock.sendMessage(jid, {
+                        video: buffer,
+                        caption: message || '',
+                        mimetype: mimeType
+                    });
+                } else if (audioExts.includes(ext)) {
+                    result = await session.sock.sendMessage(jid, {
+                        audio: buffer,
+                        mimetype: mimeType,
+                        ptt: false
+                    });
+                } else {
+                    // Documents: JSON, PDF, CSV, TXT, DOCX, XLSX, etc.
+                    result = await session.sock.sendMessage(jid, {
+                        document: buffer,
+                        mimetype: mimeType,
+                        fileName: cleanFileName || 'document',
+                        caption: message || ''
+                    });
+                }
             }
         } else {
             result = await session.sock.sendMessage(jid, { text: message });
@@ -685,14 +782,15 @@ export class EngineHost {
         }
 
         // Log outgoing message (with deduplication safeguard)
-        const logRes = chatLogsDao.log(sessionId, 'me', jid, message, 'outgoing');
+        const logDisplay = message || (cleanFileName ? `📎 [Attachment: ${cleanFileName}]` : '');
+        const logRes = chatLogsDao.log(sessionId, 'me', jid, logDisplay, 'outgoing');
         if (!logRes?.isDuplicate) {
             this.broadcast({
                 type: 'outgoing_message',
                 id: logRes?.id,
                 sessionId,
                 to: jid,
-                text: message,
+                text: logDisplay,
                 timestamp: new Date()
             });
         }

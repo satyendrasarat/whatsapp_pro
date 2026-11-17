@@ -171,11 +171,11 @@ app.post('/api/sessions/:sessionId/relink', async (req, res) => {
 
 app.post('/api/sessions/send-direct', async (req, res) => {
     const { sessionId = 'default', toPhone, message, mediaUrl } = req.body;
-    if (!toPhone || !message) {
-        return res.status(400).json({ error: 'toPhone and message are required' });
+    if (!toPhone || (!message && !mediaUrl)) {
+        return res.status(400).json({ error: 'toPhone and either message or mediaUrl are required' });
     }
     try {
-        const result = await engineHost.sendText(sessionId, toPhone, message, mediaUrl || null);
+        const result = await engineHost.sendText(sessionId, toPhone, message || '', mediaUrl || null);
         res.json({ success: true, result });
     } catch (e) {
         res.status(500).json({ error: e.message });
@@ -947,8 +947,8 @@ app.get('/api/chat/messages', (req, res) => {
 
 app.post('/api/chat/send', async (req, res) => {
     const { sessionId = 'default', jid, messageText, mediaUrl } = req.body;
-    if (!jid || !messageText) {
-        return res.status(400).json({ error: 'Both jid and messageText are required' });
+    if (!jid || (!messageText && !mediaUrl)) {
+        return res.status(400).json({ error: 'Both jid and either messageText or mediaUrl are required' });
     }
 
     try {
@@ -968,7 +968,7 @@ app.post('/api/chat/send', async (req, res) => {
             return res.status(400).json({ error: 'No active WhatsApp session is currently connected to send messages' });
         }
 
-        await engineHost.sendText(targetSessionId, jid, messageText, mediaUrl || null);
+        await engineHost.sendText(targetSessionId, jid, messageText || '', mediaUrl || null);
         res.json({ success: true });
     } catch (e) {
         res.status(500).json({ error: e.message });

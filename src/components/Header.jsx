@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Send,
   ShieldCheck,
@@ -11,7 +11,8 @@ import {
   Search,
   X,
   Phone,
-  AlertCircle
+  AlertCircle,
+  FolderOpen
 } from 'lucide-react';
 import { api } from '../services/api';
 import Modal from './Modal';
@@ -37,6 +38,7 @@ export const Header = ({
   const [inputMode, setInputMode] = useState('search'); // 'search' or 'direct'
   const [formError, setFormError] = useState('');
   const [updateState, setUpdateState] = useState(null);
+  const fileInputRef = useRef(null);
 
   const isConnected = activeSession?.status === 'connected';
 
@@ -76,7 +78,20 @@ export const Header = ({
     setIsQuickMsgOpen(false);
     setFormError('');
     setSendResult(null);
+    setMediaUrl('');
     if (onCloseQuickDispatch) onCloseQuickDispatch();
+  };
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // In Electron runtime, file.path contains the absolute local disk path
+      const filePath = file.path || file.name;
+      setMediaUrl(filePath.replace(/^["']+|["']+$/g, ''));
+      setFormError('');
+    }
+    // Reset file input so user can pick the same file again if desired
+    e.target.value = '';
   };
 
   const handleSelectContact = (c) => {
@@ -102,8 +117,9 @@ export const Header = ({
       setFormError('Please select a contact or enter a recipient phone number.');
       return;
     }
-    if (!msg.trim()) {
-      setFormError('Please type a message to send.');
+    const cleanMedia = mediaUrl.trim().replace(/^["']+|["']+$/g, '');
+    if (!msg.trim() && !cleanMedia) {
+      setFormError('Please enter a message or attach a file to send.');
       return;
     }
 
@@ -113,7 +129,7 @@ export const Header = ({
         targetPhone,
         msg.trim(),
         activeSession?.sessionId || 'default',
-        mediaUrl.trim() || null
+        cleanMedia || null
       );
       setSendResult({
         success: true,
@@ -412,18 +428,62 @@ export const Header = ({
           </div>
 
           {/* Optional Media Attachment */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-400 mb-1 flex items-center gap-1.5">
-              <Paperclip className="w-3.5 h-3.5" />
-              Optional Media / Document File Path
-            </label>
-            <input
-              type="text"
-              placeholder="e.g. C:\Users\Desktop\brochure.pdf"
-              value={mediaUrl}
-              onChange={(e) => setMediaUrl(e.target.value)}
-              className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500"
-            />
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                <Paperclip className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Media / Document Attachment (Optional)</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="text-[11px] font-medium text-emerald-400 hover:text-emerald-300 flex items-center gap-1.5 bg-emerald-950/60 hover:bg-emerald-900/60 border border-emerald-500/30 px-2.5 py-1 rounded-lg transition"
+              >
+                <FolderOpen className="w-3.5 h-3.5" />
+                <span>Browse File...</span>
+              </button>
+              <input
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                onChange={handleFileSelect}
+              />
+            </div>
+
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Click Browse File or paste path (PNG, JPG, JSON, PDF, CSV, XLSX, etc.)"
+                value={mediaUrl}
+                onChange={(e) => setMediaUrl(e.target.value.replace(/^["']+|["']+$/g, ''))}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-3 pr-8 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-emerald-500 font-mono"
+              />
+              {mediaUrl && (
+                <button
+                  type="button"
+                  onClick={() => setMediaUrl('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-400 transition"
+                  title="Remove attachment"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {mediaUrl && (
+              <div className="flex items-center gap-2 px-2.5 py-1.5 bg-slate-900/90 border border-emerald-500/30 rounded-lg text-[11px] text-slate-300">
+                <span className="text-emerald-400 font-medium">Attached:</span>
+                <span className="truncate flex-1 font-mono text-slate-200">
+                  {mediaUrl.split(/[/\\]/).pop()}
+                </span>
+                <span className="text-[10px] uppercase font-bold text-slate-500">
+                  {mediaUrl.split('.').pop()}
+                </span>
+              </div>
+            )}
+            <p className="text-[10px] text-slate-500">
+              Supports Images (.png, .jpg), Documents (.json, .pdf, .csv, .xlsx, .docx, .txt), Videos (.mp4), and Audio (.mp3).
+            </p>
           </div>
 
           {/* Form Error Message */}
