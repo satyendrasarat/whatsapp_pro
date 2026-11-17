@@ -1,0 +1,193 @@
+{
+  "version": "1.0",
+  "name": "test flow  AI CONTROL WITH GUARD AND TRANSFER TO HUMAN",
+  "trigger_keyword": "help, info, start",
+  "is_fallback": 0,
+  "is_active": 1,
+  "nodes": [
+    {
+      "id": "node-trigger-1",
+      "type": "trigger",
+      "position": {
+        "x": 9.036744550226615,
+        "y": -23.397609394360956
+      },
+      "data": {
+        "label": "Keyword Trigger",
+        "keyword": "help, info, start"
+      },
+      "measured": {
+        "width": 256,
+        "height": 134
+      },
+      "selected": false,
+      "dragging": false
+    },
+    {
+      "id": "node-msg-1",
+      "type": "message",
+      "position": {
+        "x": 142.2240957023535,
+        "y": 315.72441706997586
+      },
+      "data": {
+        "label": "Greeting Response",
+        "content": "Hello! Welcome to our automated WhatsApp service. How can we assist you today?"
+      },
+      "measured": {
+        "width": 288,
+        "height": 167
+      },
+      "selected": false,
+      "dragging": false
+    },
+    {
+      "id": "node-condition-6075",
+      "type": "condition",
+      "position": {
+        "x": 465.69522502869097,
+        "y": 19.23893830329351
+      },
+      "data": {
+        "label": "Condition Check",
+        "prompt": "Please reply with your details or preference:, if want to chat with AI assistance or Human . for AI type yes else no will connect to human ",
+        "conditionText": "yes, agree, buy"
+      },
+      "measured": {
+        "width": 256,
+        "height": 284
+      },
+      "selected": false,
+      "dragging": false
+    },
+    {
+      "id": "node-human_handover-5371",
+      "type": "human_handover",
+      "position": {
+        "x": 893.6273352379197,
+        "y": -28.908888226556556
+      },
+      "data": {
+        "label": "Human Agent Handover",
+        "message": "🔔 Connecting you with a live human support specialist. One moment please...",
+        "note": "Customer reached live support handover"
+      },
+      "measured": {
+        "width": 320,
+        "height": 182
+      },
+      "selected": false,
+      "dragging": false
+    },
+    {
+      "id": "node-ai_handover-6724",
+      "type": "ai_handover",
+      "position": {
+        "x": 745.0188190782236,
+        "y": 293.1910263890672
+      },
+      "data": {
+        "label": "AI Knowledge Handover",
+        "introText": "🤖 *AI Specialist Connected!*\nAsk me anything about our products, pricing, or services.\nat any moment can get connected to human by sending \"pass\"",
+        "systemPrompt": "You are an intelligent WhatsApp customer support and sales assistant.",
+        "escalateOnConfusion": true,
+        "confusionKeywords": "pass"
+      },
+      "measured": {
+        "width": 320,
+        "height": 283
+      },
+      "selected": true,
+      "dragging": false
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-init-1",
+      "source": "node-trigger-1",
+      "target": "node-msg-1",
+      "animated": true,
+      "style": {
+        "stroke": "#10b981",
+        "strokeWidth": 2
+      },
+      "markerEnd": {
+        "type": "arrowclosed",
+        "color": "#10b981"
+      }
+    },
+    {
+      "source": "node-msg-1",
+      "target": "node-condition-6075",
+      "animated": true,
+      "style": {
+        "stroke": "#10b981",
+        "strokeWidth": 2
+      },
+      "markerEnd": {
+        "type": "arrowclosed",
+        "color": "#10b981"
+      },
+      "id": "xy-edge__node-msg-1-node-condition-6075"
+    },
+    {
+      "source": "node-trigger-1",
+      "target": "node-condition-6075",
+      "animated": true,
+      "style": {
+        "stroke": "#10b981",
+        "strokeWidth": 2
+      },
+      "markerEnd": {
+        "type": "arrowclosed",
+        "color": "#10b981"
+      },
+      "id": "xy-edge__node-trigger-1-node-condition-6075"
+    },
+    {
+      "source": "node-condition-6075",
+      "sourceHandle": "nomatch",
+      "target": "node-human_handover-5371",
+      "animated": true,
+      "style": {
+        "stroke": "#10b981",
+        "strokeWidth": 2
+      },
+      "markerEnd": {
+        "type": "arrowclosed",
+        "color": "#10b981"
+      },
+      "id": "xy-edge__node-condition-6075nomatch-node-human_handover-5371"
+    },
+    {
+      "source": "node-ai_handover-6724",
+      "target": "node-human_handover-5371",
+      "animated": true,
+      "style": {
+        "stroke": "#10b981",
+        "strokeWidth": 2
+      },
+      "markerEnd": {
+        "type": "arrowclosed",
+        "color": "#10b981"
+      },
+      "id": "xy-edge__node-ai_handover-6724-node-human_handover-5371"
+    },
+    {
+      "source": "node-condition-6075",
+      "sourceHandle": "match",
+      "target": "node-ai_handover-6724",
+      "animated": true,
+      "style": {
+        "stroke": "#10b981",
+        "strokeWidth": 2
+      },
+      "markerEnd": {
+        "type": "arrowclosed",
+        "color": "#10b981"
+      },
+      "id": "xy-edge__node-condition-6075match-node-ai_handover-6724"
+    }
+  ],
+  "exported_at": "2026-11-17T03:28:32.505Z"
+}
